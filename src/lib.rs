@@ -42,8 +42,16 @@ mod tests {
 
     #[test]
     fn test_schnorr_signature() {
-        let private_key = Scalar::generate_biased(&mut rand::thread_rng());
-        let public_key = k256::ProjectivePoint::GENERATOR * private_key;
+        let mut private_key = Scalar::generate_biased(&mut rand::thread_rng());
+        let mut public_key = k256::ProjectivePoint::GENERATOR * private_key;
+
+        // y가 홀수인 경우 부호를 반전시켜 짝수로 만듦
+        let affine = public_key.to_affine();
+        if affine.y_is_odd().into() {
+            // 홀수 y 좌표면 부호를 반전 (scalar를 부정하면 y 좌표도 부정됨)
+            private_key = -private_key;
+            public_key = k256::ProjectivePoint::GENERATOR * private_key;
+        }
 
         let message = b"Hello, PDAO!";
         let signing_key = k256::schnorr::SigningKey::from(
@@ -55,10 +63,11 @@ mod tests {
         let signature = signing_key
             .sign_raw(message, k.to_bytes().as_ref())
             .unwrap();
+        println!("signature: {:?}", public_key.to_affine());
+        println!("signature: {:?}", signature);
         let verifying_key = k256::schnorr::VerifyingKey::try_from(
             k256::PublicKey::from_affine(public_key.to_affine()).unwrap(),
-        )
-        .unwrap();
-        verifying_key.verify_raw(message, &signature).unwrap();
+        ).unwrap();
+        verifying_key.verify_raw(message, &signature).expect("failed to verify signature");
     }
 }
